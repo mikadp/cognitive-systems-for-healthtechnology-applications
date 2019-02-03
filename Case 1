@@ -1,0 +1,150 @@
+##Import libraries and import data set from url
+
+%pylab inline
+import time
+import pandas as pd
+
+from sklearn.utils import shuffle
+from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
+
+from keras.utils import to_categorical
+from keras import models, layers
+
+## Data description and preprocessing
+#URL for dataset
+url = r'https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data'
+df = pd.read_csv(url, sep =',', header = None, index_col = None, na_values = '?')
+
+##Data description and preprocessing
+
+#column names from dataset
+names_list = ['age','sex','cp','trestbps','chol','fbs','restecg','thalac','exang','oldpeak','slope','ca','thal','num']
+df.columns = names_list
+
+# Filling missing data with median values
+df = df.fillna(df.median())
+
+# Randomize rows
+df = shuffle(df)
+df.describe()
+
+# Select the data (input) columns
+data_list = ['age', 'sex', 'cp','trestbps', 'chol', 'fbs','restecg','thalac','exang','oldpeak','slope','ca','thal']
+data = df[data_list]
+
+# Scale the data
+data_min = data.min()
+data_max = data.max()
+data_norm = (data - data_min)/(data_max - data_min)
+
+# Check descriptive statistics of normalized data
+data_norm.describe()
+
+# Select labels (output)
+labels = df['num']
+
+## Modeling and compilation
+
+# Plot the histogram of the labels (severity of the disease)
+plt.hist(labels, bins = [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5])
+plt.xlabel('Severity of the disease')
+plt.ylabel('Frequency')
+plt.title('Histogram of labels')
+show()
+
+#Labels to categorical output
+one_hot_labels = to_categorical(labels)
+one_hot_labels[:,:5]
+
+#check the shapes of the normalized data and categorical output
+print('Shape of data and one hot labels:', data_norm.shape, one_hot_labels.shape)
+
+# Split the data and labels into training and validation sets
+train_data = data_norm[:200]
+val_data = data_norm[200:]
+
+
+train_labels = one_hot_labels[:200]
+val_labels = one_hot_labels[200:]
+
+#build the model
+model = models.Sequential()
+model.add(layers.Dense(9, activation='sigmoid', input_shape=(13,)))
+model.add(layers.Dense(5, activation='softmax'))
+model.summary()
+
+#compile thje model
+model.compile(optimizer = 'adam',
+             loss = 'categorical_crossentropy',
+             metrics = ['accuracy'])
+
+# Training and Validation
+# fit the model with the data and keep record on elapsed time
+t_strat = time.time()
+
+# Fit the model with the data and keep record on elapsed time
+t_start = time.time()
+history = model.fit(train_data, train_labels, 
+                    epochs = 250, 
+                    batch_size = 15, 
+                    verbose = 0,
+                    validation_data = (val_data, val_labels))
+t_end = time.time()
+print('Elapsed time: {:.2f} seconds'.format(t_end - t_start))
+
+# Get the training data
+history_dict = history.history
+loss_values = history_dict['loss']
+val_loss_values = history_dict['val_loss']
+acc_values = history_dict['acc']
+val_acc_values = history_dict['val_acc']
+epochs = range(1, len(loss_values) + 1)
+
+# Visualize the training process: loss function
+plt.figure()
+plt.plot(epochs, loss_values, 'b', label='Training loss')
+plt.plot(epochs, val_loss_values, 'r', label='Validation loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.ylim([0, 1])
+plt.legend()
+plt.show()
+
+# Visualize the accuracy
+plt.figure()
+plt.plot(epochs, acc_values, 'b', label='Training acc')
+plt.plot(epochs, val_acc_values, 'r', label='Validation acc')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.ylim([0, 1])
+plt.legend()
+plt.show()
+
+## Results and Discussion
+# Print total accuracy and confusion matrix
+val_predicts = model.predict(data_norm)
+y_pred = argmax(val_predicts, axis = 1)
+cm = confusion_matrix(labels, y_pred)
+
+# Best guess = Guess that all are normal
+# ==> Normal cases are correctly classified
+# Normal cases can be counted by summing all labels that are zeros
+print('Best guess: {:.4f}'.format(np.sum(labels == 0)/len(labels)))
+
+# Accuracy can be calculated from the confusion matrix by
+# counting all elements in diagonal (=trace of the matrix)
+print('Total accuracy: {:.4f}'.format(np.trace(cm)/sum(cm)))
+print('Confusion matrix:')
+print(cm)
+
+# Calculate precision, recall, fscore and support
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    p, r, f, s = precision_recall_fscore_support(labels, y_pred)
+
+# Print precision, recall, fscore and support  
+np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
+print('Support:\n', s)
+print('Precision:', p)
+print('Recall:   ', r)
+print('F-score:  ', f)
